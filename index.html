@@ -80,10 +80,10 @@
             color: #222;
             display: none; 
         }
-        #wordInput {
+        #wordInput { /* This is the main input field */
             padding: 15px;
             margin: 15px 0;
-            width: 80%; 
+            width: 80%; /* Base width */
             font-size: 1.5em;
             border: 2px solid #ccc;
             border-radius: 8px;
@@ -155,7 +155,9 @@
                 position: relative;
             }
             
-            #wordInput {
+            /* Ensure the mobile word input is visible and correctly ordered */
+            #wordInput { 
+                display: block; /* Make sure it's not hidden */
                 padding: 10px; 
                 margin: 5px 0 10px 0; 
                 width: 90%; 
@@ -169,6 +171,7 @@
                 font-size: 1em;
             }
             
+            /* The submit button is typically controlled by 'Enter' key on mobile */
             #submitButton { display: none !important; }
 
             #continueButton {
@@ -233,11 +236,12 @@
         </div>
         
         <div id="button-group-desktop">
-            <input type="text" id="wordInputDesktop" placeholder="Type the word here..." autofocus style="display: none;"> <button class="speak-word-btn" id="speakWordButtonDesktop">🔊 Hear Word</button>
+            <input type="text" id="wordInputDesktop" placeholder="Type the word here..." autofocus> 
+            <button class="speak-word-btn" id="speakWordButtonDesktop">🔊 Hear Word</button>
             <button class="speak-sentence-btn" id="speakSentenceButtonDesktop">📖 Context</button>
         </div>
 
-        <button id="submitButton" style="display: none;">✅ Submit Answer</button>
+        <button id="submitButton">✅ Submit Answer</button>
     </div>
     
     <div id="results">
@@ -291,21 +295,27 @@
     const progressEl = document.getElementById('progress');
     const scoreEl = document.getElementById('score');
     const progressBarContainerEl = document.getElementById('progressBarContainer');
-    // We use the mobile input for the main logic as it's the element that receives focus/input on both views
-    const inputEl = document.getElementById('wordInput'); 
+    
+    // Updated: Reference the correct input based on screen size, or use a primary one.
+    // We'll use wordInput for primary logic, and ensure display handling
+    const inputElMobile = document.getElementById('wordInput'); 
+    const inputElDesktop = document.getElementById('wordInputDesktop');
+    let activeInputEl; // This will hold the currently visible input element
+
     const messageEl = document.getElementById('message');
     const continueButtonEl = document.getElementById('continueButton');
     const testInterfaceEl = document.getElementById('test-interface');
     const resultsTableBodyEl = document.querySelector('#resultsTable tbody');
     const contextDisplayEl = document.getElementById('contextDisplay'); 
     const statusAreaEl = document.getElementById('status-area');
-    
+    const submitButtonEl = document.getElementById('submitButton'); // Submit button for desktop
+
+
     // Select both mobile and desktop buttons by their specific IDs for event listeners
     const speakWordButtonMobileEl = document.getElementById('speakWordButton');
     const speakSentenceButtonMobileEl = document.getElementById('speakSentenceButton'); 
     const speakWordButtonDesktopEl = document.getElementById('speakWordButtonDesktop');
     const speakSentenceButtonDesktopEl = document.getElementById('speakSentenceButtonDesktop');
-
 
     // --- 2. SPEECH SYNTHESIS SETUP ---
 
@@ -329,7 +339,6 @@
     }
 
     function speakWord() {
-        // Ensures initialization happens on the first user interaction
         initSpeech(); 
         if (currentWordIndex >= spellingList.length) return;
         
@@ -340,7 +349,7 @@
         contextDisplayEl.style.display = 'none'; 
         continueButtonEl.style.display = 'none'; 
         speechSynthesis.speak(utterance);
-        inputEl.focus(); 
+        activeInputEl.focus(); 
     }
     
     function escapeRegExp(string) {
@@ -367,7 +376,7 @@
         continueButtonEl.style.display = 'none'; 
 
         speechSynthesis.speak(utterance);
-        inputEl.focus(); 
+        activeInputEl.focus(); 
     }
 
     // --- 3. TEST LOGIC ---
@@ -377,25 +386,39 @@
         speakSentenceButtonMobileEl.disabled = !enable;
         speakWordButtonDesktopEl.disabled = !enable;
         speakSentenceButtonDesktopEl.disabled = !enable;
-        inputEl.disabled = !enable;
+        submitButtonEl.disabled = !enable; // Also toggle desktop submit button
+        activeInputEl.disabled = !enable;
     }
 
+    // Function to determine which input element is active based on screen size
+    function setActiveInputAndDisplay() {
+        const isMobileView = window.matchMedia("(max-width: 600px)").matches;
+
+        if (isMobileView) {
+            activeInputEl = inputElMobile;
+            inputElMobile.style.display = 'block';
+            inputElDesktop.style.display = 'none';
+            document.getElementById('button-container-mobile').style.display = 'flex';
+            document.getElementById('button-group-desktop').style.display = 'none';
+            submitButtonEl.style.display = 'none'; // Submit button is implicit with Enter on mobile
+        } else {
+            activeInputEl = inputElDesktop;
+            inputElDesktop.style.display = 'block';
+            inputElMobile.style.display = 'none';
+            document.getElementById('button-container-mobile').style.display = 'none';
+            document.getElementById('button-group-desktop').style.display = 'block';
+            submitButtonEl.style.display = 'inline-block'; // Show submit button on desktop
+        }
+    }
+
+
     function adjustProgressBarWidth() {
-        // Use requestAnimationFrame to ensure we measure after any layout changes
         requestAnimationFrame(() => {
-            const inputWidth = inputEl.offsetWidth;
-            // Only set width if input is visible (prevents errors on hidden elements)
+            const inputWidth = activeInputEl.offsetWidth;
             if (inputWidth > 0) {
                  progressBarContainerEl.style.width = `${inputWidth}px`;
                  statusAreaEl.style.width = `${inputWidth}px`;
-            } else {
-                 // Fallback for desktop view if mobile input is hidden (unlikely with this setup)
-                 const desktopGroup = document.getElementById('button-group-desktop');
-                 if (desktopGroup.offsetWidth > 0) {
-                     progressBarContainerEl.style.width = `${desktopGroup.offsetWidth}px`;
-                     statusAreaEl.style.width = `${desktopGroup.offsetWidth}px`;
-                 }
-            }
+            } 
         });
     }
 
@@ -427,13 +450,13 @@
     }
 
     function updateProgress() {
-        inputEl.value = '';
+        activeInputEl.value = '';
         messageEl.textContent = '';
         contextDisplayEl.textContent = '';
         contextDisplayEl.style.display = 'none';
         continueButtonEl.style.display = 'none'; 
         toggleButtons(true); 
-        inputEl.focus(); 
+        activeInputEl.focus(); 
         
         updateScoreAndProgress();
         adjustProgressBarWidth();
@@ -442,7 +465,7 @@
     function checkSpelling() {
         if (currentWordIndex >= spellingList.length) return;
 
-        const typedWord = inputEl.value.trim();
+        const typedWord = activeInputEl.value.trim();
         const correctWord = spellingList[currentWordIndex].word;
         const isCorrect = typedWord.toLowerCase() === correctWord.toLowerCase();
 
@@ -472,7 +495,7 @@
             currentWordIndex++;
             updateScoreAndProgress(); 
             continueButtonEl.style.display = 'inline-block';
-            inputEl.blur(); 
+            activeInputEl.blur(); 
             continueButtonEl.focus(); 
         }
     }
@@ -513,6 +536,7 @@
             speakSentenceButtonMobileEl.style.display = 'none';
             document.getElementById('button-group-desktop').style.display = 'none';
             document.getElementById('secondary-buttons-mobile').style.display = 'none';
+            submitButtonEl.style.display = 'none'; // Hide submit button after test
         }
     }
     
@@ -533,13 +557,28 @@
     speakWordButtonDesktopEl.addEventListener('click', speakWord);
     speakSentenceButtonDesktopEl.addEventListener('click', speakSentence);
 
-    // Enter Key is the primary submission method
-    inputEl.addEventListener('keypress', function(e) {
+    // Common Submit Button (used for desktop, or by Enter key on mobile)
+    submitButtonEl.addEventListener('click', checkSpelling);
+
+    // Enter Key is the primary submission method for both inputs
+    inputElMobile.addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
             e.preventDefault(); 
             if (continueButtonEl.style.display === 'inline-block') {
                 continueButtonEl.click();
-            } else if (!inputEl.disabled) { 
+            } else if (!activeInputEl.disabled) { 
+                initSpeech(); 
+                checkSpelling();
+            }
+        }
+    });
+
+    inputElDesktop.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault(); 
+            if (continueButtonEl.style.display === 'inline-block') {
+                continueButtonEl.click();
+            } else if (!activeInputEl.disabled) { 
                 initSpeech(); 
                 checkSpelling();
             }
@@ -548,13 +587,17 @@
 
     continueButtonEl.addEventListener('click', function() {
         nextStep();
-        inputEl.focus(); 
+        activeInputEl.focus(); 
     });
     
-    window.addEventListener('resize', adjustProgressBarWidth);
+    window.addEventListener('resize', () => {
+        setActiveInputAndDisplay(); // Re-evaluate active input on resize
+        adjustProgressBarWidth();
+    });
 
     // --- 5. INITIALISATION ---
-    
+    // Initial call to set the correct input and display mode
+    setActiveInputAndDisplay();
     updateProgress(); 
     
     window.onload = adjustProgressBarWidth;
