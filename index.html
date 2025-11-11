@@ -118,6 +118,10 @@
         .speak-sentence-btn { background-color: #008CBA; color: white; }
         .speak-sentence-btn:hover { background-color: #007bb5; }
         
+        /* New Speech Recognition Button Styling */
+        .speech-rec-btn { background-color: #6a1b9a; color: white; } /* Purple */
+        .speech-rec-btn:hover { background-color: #4a148c; }
+
         /* Continue Button */
         #continueButton { 
             background-color: #f44336; 
@@ -132,6 +136,14 @@
             font-size: 1.2em;
             font-weight: bold;
             min-height: 25px;
+        }
+        
+        /* Style for the recognized letter display */
+        #recognizedLetter {
+            font-size: 2em;
+            color: #6a1b9a;
+            margin-top: 10px;
+            font-weight: bold;
         }
 
         /* --- MOBILE OPTIMIZATION (Max screen width 600px) --- */
@@ -197,6 +209,11 @@
                 width: 49%;
                 margin: 0 0.5%;
             }
+            /* Adjust layout for new button on mobile if needed */
+            #speakLetterButton {
+                order: 5; /* Place it below other buttons */
+                margin-top: 10px;
+            }
         }
         /* Results Styling remains the same */
         #results { margin-top: 30px; text-align: left; width: 100%; display: none; }
@@ -233,13 +250,16 @@
                 <button class="speak-word-btn" id="speakWordButton">🔊 Hear Word</button>
                 <button class="speak-sentence-btn" id="speakSentenceButton">📖 Context</button>
             </div>
-        </div>
+            
+            <button class="speech-rec-btn" id="speakLetterButton">🎤 Say 'A'</button> 
+            <span id="recognizedLetter"></span> </div>
         
         <div id="button-group-desktop">
             <input type="text" id="wordInputDesktop" placeholder="Type the word here..." autofocus> 
             <button class="speak-word-btn" id="speakWordButtonDesktop">🔊 Hear Word</button>
             <button class="speak-sentence-btn" id="speakSentenceButtonDesktop">📖 Context</button>
-        </div>
+            <button class="speech-rec-btn" id="speakLetterButtonDesktop">🎤 Say 'A'</button> 
+            <span id="recognizedLetterDesktop"></span> </div>
 
         <button id="submitButton">✅ Submit Answer</button>
     </div>
@@ -296,11 +316,9 @@
     const scoreEl = document.getElementById('score');
     const progressBarContainerEl = document.getElementById('progressBarContainer');
     
-    // Updated: Reference the correct input based on screen size, or use a primary one.
-    // We'll use wordInput for primary logic, and ensure display handling
     const inputElMobile = document.getElementById('wordInput'); 
     const inputElDesktop = document.getElementById('wordInputDesktop');
-    let activeInputEl; // This will hold the currently visible input element
+    let activeInputEl; 
 
     const messageEl = document.getElementById('message');
     const continueButtonEl = document.getElementById('continueButton');
@@ -308,14 +326,18 @@
     const resultsTableBodyEl = document.querySelector('#resultsTable tbody');
     const contextDisplayEl = document.getElementById('contextDisplay'); 
     const statusAreaEl = document.getElementById('status-area');
-    const submitButtonEl = document.getElementById('submitButton'); // Submit button for desktop
+    const submitButtonEl = document.getElementById('submitButton'); 
 
-
-    // Select both mobile and desktop buttons by their specific IDs for event listeners
     const speakWordButtonMobileEl = document.getElementById('speakWordButton');
     const speakSentenceButtonMobileEl = document.getElementById('speakSentenceButton'); 
     const speakWordButtonDesktopEl = document.getElementById('speakWordButtonDesktop');
     const speakSentenceButtonDesktopEl = document.getElementById('speakSentenceButtonDesktop');
+
+    // NEW: Speech Recognition elements
+    const speakLetterButtonEl = document.getElementById('speakLetterButton');
+    const speakLetterButtonDesktopEl = document.getElementById('speakLetterButtonDesktop');
+    const recognizedLetterEl = document.getElementById('recognizedLetter');
+    const recognizedLetterDesktopEl = document.getElementById('recognizedLetterDesktop');
 
     // --- 2. SPEECH SYNTHESIS SETUP ---
 
@@ -379,6 +401,69 @@
         activeInputEl.focus(); 
     }
 
+    // --- NEW: SPEECH RECOGNITION LOGIC ---
+    let recognition; // Declare globally to manage state
+
+    function setupSpeechRecognition() {
+        // Check for browser compatibility
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Speech recognition is not supported in this browser. Please use Chrome or Edge.");
+            speakLetterButtonEl.disabled = true;
+            if(speakLetterButtonDesktopEl) speakLetterButtonDesktopEl.disabled = true;
+            return;
+        }
+
+        recognition = new SpeechRecognition();
+        recognition.continuous = false; // Only get one result
+        recognition.lang = 'en-GB'; // Set language to UK English for better 'A' recognition
+        recognition.interimResults = false; // Only return final results
+        recognition.maxAlternatives = 1; // Get the most probable result
+
+        recognition.onstart = () => {
+            messageEl.textContent = "🎤 Listening... Say 'A'!";
+            speakLetterButtonEl.disabled = true;
+            if(speakLetterButtonDesktopEl) speakLetterButtonDesktopEl.disabled = true;
+        };
+
+        recognition.onresult = (event) => {
+            const last = event.results.length - 1;
+            const transcript = event.results[last][0].transcript.trim().toUpperCase(); // Get transcript and convert to uppercase
+            
+            // Display the recognized letter
+            if (window.matchMedia("(max-width: 600px)").matches) {
+                recognizedLetterEl.textContent = `You said: "${transcript}"`;
+            } else {
+                recognizedLetterDesktopEl.textContent = `You said: "${transcript}"`;
+            }
+            messageEl.textContent = ""; // Clear listening message
+        };
+
+        recognition.onerror = (event) => {
+            messageEl.textContent = `Speech recognition error: ${event.error}`;
+            console.error('Speech recognition error:', event.error);
+            speakLetterButtonEl.disabled = false;
+            if(speakLetterButtonDesktopEl) speakLetterButtonDesktopEl.disabled = false;
+        };
+
+        recognition.onend = () => {
+            speakLetterButtonEl.disabled = false;
+            if(speakLetterButtonDesktopEl) speakLetterButtonDesktopEl.disabled = false;
+            if (messageEl.textContent.includes("Listening")) { // If still listening message, no result was given
+                messageEl.textContent = "🎤 No speech detected. Try again!";
+            }
+        };
+    }
+
+    function startListeningForA() {
+        if (recognition) {
+            recognition.start();
+        } else {
+            messageEl.textContent = "Speech recognition is not initialized.";
+        }
+    }
+    // --- END NEW: SPEECH RECOGNITION LOGIC ---
+
     // --- 3. TEST LOGIC ---
 
     function toggleButtons(enable) {
@@ -386,11 +471,14 @@
         speakSentenceButtonMobileEl.disabled = !enable;
         speakWordButtonDesktopEl.disabled = !enable;
         speakSentenceButtonDesktopEl.disabled = !enable;
-        submitButtonEl.disabled = !enable; // Also toggle desktop submit button
+        submitButtonEl.disabled = !enable; 
         activeInputEl.disabled = !enable;
+        
+        // Also manage the 'Say A' button state
+        speakLetterButtonEl.disabled = !enable;
+        if(speakLetterButtonDesktopEl) speakLetterButtonDesktopEl.disabled = !enable;
     }
 
-    // Function to determine which input element is active based on screen size
     function setActiveInputAndDisplay() {
         const isMobileView = window.matchMedia("(max-width: 600px)").matches;
 
@@ -400,14 +488,22 @@
             inputElDesktop.style.display = 'none';
             document.getElementById('button-container-mobile').style.display = 'flex';
             document.getElementById('button-group-desktop').style.display = 'none';
-            submitButtonEl.style.display = 'none'; // Submit button is implicit with Enter on mobile
+            submitButtonEl.style.display = 'none'; 
+
+            // Show mobile specific elements, hide desktop ones
+            recognizedLetterEl.style.display = 'block';
+            recognizedLetterDesktopEl.style.display = 'none';
         } else {
             activeInputEl = inputElDesktop;
             inputElDesktop.style.display = 'block';
             inputElMobile.style.display = 'none';
             document.getElementById('button-container-mobile').style.display = 'none';
             document.getElementById('button-group-desktop').style.display = 'block';
-            submitButtonEl.style.display = 'inline-block'; // Show submit button on desktop
+            submitButtonEl.style.display = 'inline-block'; 
+            
+            // Show desktop specific elements, hide mobile ones
+            recognizedLetterEl.style.display = 'none';
+            recognizedLetterDesktopEl.style.display = 'block';
         }
     }
 
@@ -455,6 +551,11 @@
         contextDisplayEl.textContent = '';
         contextDisplayEl.style.display = 'none';
         continueButtonEl.style.display = 'none'; 
+        
+        // Clear recognized letter display
+        recognizedLetterEl.textContent = '';
+        recognizedLetterDesktopEl.textContent = '';
+
         toggleButtons(true); 
         activeInputEl.focus(); 
         
@@ -536,7 +637,9 @@
             speakSentenceButtonMobileEl.style.display = 'none';
             document.getElementById('button-group-desktop').style.display = 'none';
             document.getElementById('secondary-buttons-mobile').style.display = 'none';
-            submitButtonEl.style.display = 'none'; // Hide submit button after test
+            submitButtonEl.style.display = 'none'; 
+            speakLetterButtonEl.style.display = 'none'; // Hide the new button after test
+            if(speakLetterButtonDesktopEl) speakLetterButtonDesktopEl.style.display = 'none';
         }
     }
     
@@ -552,10 +655,12 @@
     // Mobile Buttons
     speakWordButtonMobileEl.addEventListener('click', speakWord);
     speakSentenceButtonMobileEl.addEventListener('click', speakSentence); 
-    
+    speakLetterButtonEl.addEventListener('click', startListeningForA); // NEW Listener
+
     // Desktop Buttons
     speakWordButtonDesktopEl.addEventListener('click', speakWord);
     speakSentenceButtonDesktopEl.addEventListener('click', speakSentence);
+    speakLetterButtonDesktopEl.addEventListener('click', startListeningForA); // NEW Listener
 
     // Common Submit Button (used for desktop, or by Enter key on mobile)
     submitButtonEl.addEventListener('click', checkSpelling);
@@ -591,12 +696,12 @@
     });
     
     window.addEventListener('resize', () => {
-        setActiveInputAndDisplay(); // Re-evaluate active input on resize
+        setActiveInputAndDisplay(); 
         adjustProgressBarWidth();
     });
 
     // --- 5. INITIALISATION ---
-    // Initial call to set the correct input and display mode
+    setupSpeechRecognition(); // NEW: Initialize Speech Recognition
     setActiveInputAndDisplay();
     updateProgress(); 
     
