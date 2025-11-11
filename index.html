@@ -1,0 +1,167 @@
+<script>
+    // ... (Existing CONFIGURATION and Variable Declarations) ...
+
+    // --- NEW SPEECH RECOGNITION SETUP ---
+    // Check for browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null; 
+
+    // Get the new button elements
+    const spellingBeeButtonEl = document.getElementById('spellingBeeButton');
+    const spellingBeeDesktopEl = document.getElementById('spellingBeeButton_desktop');
+    
+    // Flag to track if the current word is in Spelling Bee mode
+    let isSpellingBeeMode = false; 
+
+    // --- 2. SPEECH SYNTHESIS SETUP (Existing Functions: getUKVoice, createUtterance, speakWord, speakSentence) ---
+    // ... (EXISTING SPEECH FUNCTIONS ARE UNCHANGED) ...
+
+    // --- NEW: SPELLING BEE LOGIC ---
+
+    function startSpellingBeeMode() {
+        if (currentWordIndex >= spellingList.length) return;
+        
+        // Initialization check (ensures UI is ready)
+        initSpeech(); 
+
+        isSpellingBeeMode = true;
+        
+        // Hide regular input/buttons and prepare UI
+        inputEl.style.display = 'none';
+        messageEl.textContent = "Spell the word out loud, letter by letter, after the tone.";
+        
+        // Speak the word first to start the test
+        speakWord();
+
+        // Wait for the word to finish speaking before starting recognition
+        // This is necessary to avoid confusing the mic with the computer voice
+        setTimeout(() => {
+            messageEl.textContent = "👂 LISTENING: Spell the word, one letter at a time.";
+            
+            // --- Speech Recognition Initialisation ---
+            if (!SpeechRecognition) {
+                messageEl.textContent = "❌ Error: Speech Recognition not supported in this browser.";
+                isSpellingBeeMode = false;
+                inputEl.style.display = 'block';
+                return;
+            }
+            
+            recognition = new SpeechRecognition();
+            recognition.continuous = false; // We only want one phrase (the word)
+            recognition.lang = 'en-GB';
+            recognition.interimResults = false;
+            
+            // --- Recognition Result Handler ---
+            recognition.onresult = function(event) {
+                // Get the final transcribed result
+                const spokenResult = event.results[0][0].transcript;
+                
+                // Clean the result: remove all spaces, convert to lowercase
+                const cleanedSpelling = spokenResult.toLowerCase().replace(/\s/g, ''); 
+                
+                const correctWord = spellingList[currentWordIndex].word;
+
+                // Create a simulated result object for standard checkSpelling
+                const simulatedEvent = {
+                    key: 'Enter',
+                    preventDefault: () => {},
+                    target: { value: cleanedSpelling }
+                };
+
+                // Store the transcribed result for feedback
+                inputEl.value = spokenResult;
+                inputEl.style.display = 'block';
+                
+                // Temporarily disable the input so checkSpelling runs correctly
+                inputEl.disabled = true;
+
+                // Check the spoken spelling
+                checkSpelling(true); // Pass 'true' to indicate this is a spoken attempt
+                
+                isSpellingBeeMode = false; // Reset mode
+            }
+
+            // --- Error Handling ---
+            recognition.onerror = function(event) {
+                messageEl.textContent = `🎤 Recognition Error: ${event.error}. Try again.`;
+                inputEl.style.display = 'block';
+                isSpellingBeeMode = false;
+                toggleButtons(true);
+            }
+
+            // Start listening
+            recognition.start();
+
+        }, 1500); // 1.5 seconds delay after word is spoken
+    }
+
+    // --- 3. TEST LOGIC (Updated to handle Spelling Bee Check) ---
+
+    // NOTE: checkSpelling needs a slight update to handle the value passed from the spoken result
+    function checkSpelling(isSpokenAttempt = false) {
+        if (currentWordIndex >= spellingList.length) return;
+
+        // If it's a spoken attempt, the inputEl.value will already be set by onresult
+        const typedWord = isSpokenAttempt ? inputEl.value.trim() : inputEl.value.trim();
+        const correctWord = spellingList[currentWordIndex].word;
+
+        // For spoken attempts, the result is already cleaned and ready to compare
+        const submittedWordCleaned = isSpokenAttempt ? typedWord.toLowerCase().replace(/\s/g, '') : typedWord.toLowerCase();
+        const isCorrect = submittedWordCleaned === correctWord.toLowerCase();
+
+
+        if (typedWord === "" && !isSpokenAttempt) {
+            messageEl.textContent = "⚠️ Please type a word first!";
+            continueButtonEl.style.display = 'none';
+            return;
+        }
+        
+        toggleButtons(false); 
+        
+        resultsLog.push({
+            index: currentWordIndex + 1,
+            correctWord: correctWord,
+            // Log the user's actual spoken/typed submission
+            submittedWord: typedWord, 
+            isCorrect: isCorrect
+        });
+        
+        if (isCorrect) {
+            score++;
+            messageEl.textContent = isSpokenAttempt ? "✅ Correct! Your pronunciation was: " + typedWord : "✅ Correct! Moving to the next word...";
+            currentWordIndex++;
+            updateScoreAndProgress(); 
+            setTimeout(nextStep, 1000); 
+        } else {
+            messageEl.textContent = isSpokenAttempt 
+                ? `❌ Incorrect. You said: "${typedWord}". The correct spelling was: "${correctWord}".`
+                : `❌ Incorrect. The correct spelling was: "${correctWord}".`;
+
+            currentWordIndex++;
+            updateScoreAndProgress(); 
+            continueButtonEl.style.display = 'inline-block';
+            inputEl.blur(); 
+            continueButtonEl.focus(); 
+        }
+    }
+    
+    function updateProgress() {
+        // ... (Existing updateProgress logic) ...
+        // Ensure input is visible and enabled when not in Spelling Bee mode
+        if (!isSpellingBeeMode) {
+             inputEl.style.display = 'block';
+             inputEl.disabled = false;
+        }
+        // ... (rest of the function)
+    }
+
+    // --- 4. EVENT LISTENERS (Update) ---
+    
+    // ... (Existing click listeners for speakWord and speakSentence) ...
+
+    // NEW: Spelling Bee button listeners
+    spellingBeeButtonEl.addEventListener('click', startSpellingBeeMode);
+    spellingBeeDesktopEl.addEventListener('click', startSpellingBeeMode);
+
+    // ... (Rest of event listeners, unchanged) ...
+</script>
